@@ -4,7 +4,7 @@ var cheerio = require('cheerio');
 var async = require("async");
 var request = require('request');
 var index = 1;
-var mainUrl = 'http://moban.cn86.cn:8000/W80283/';
+var mainUrl = 'http://moban.cn86.cn:8000/w90124/';
 
 var linkList = mainUrl.split('/');
 var mainDir = linkList[linkList.length - 2];
@@ -30,7 +30,8 @@ var htmlPath = [
     {url: mainUrl+'about/',  name:'about.html'},
     {url: mainUrl+'case/',  name:'case.html'},
     {url: mainUrl+'product/',  name:'product.html'},
-    {url: mainUrl+'news/',  name:'news.html'}
+    {url: mainUrl+'news/',  name:'news.html'},
+    {url: mainUrl+'message/',  name:'message.html'}
 ]
 
 htmlPath.forEach(function(item,index,arr){
@@ -49,6 +50,10 @@ htmlPath.forEach(function(item,index,arr){
              })
     
             /* 下载图片 */
+             // 这种格式无法下载(http://moban.cn86.cn:8000/W80283/data/include/imagecode.php?act=verifycode) 
+            // 一般是验证码，验证吗通常都有 id="checkCodeImg"
+            $('img[id="checkCodeImg"]').remove();
+
             var imageLinks = []
             $('img[src]').each(function(){
                 var src = $(this).attr('src');
@@ -58,13 +63,18 @@ htmlPath.forEach(function(item,index,arr){
                 $(this).attr('src', newSrc);
 
                 // 补全图片路径
-                if (src.indexOf(mainUrl) == -1) {
+                if (src.indexOf(mainUrl) == -1 && src !== "") {
                     if( src.indexOf(mainDir) != -1) {
                         src= mainUrl.replace(mainDir,'')+src;
                     } else {
                         src= mainUrl+src;
                     }
                 }
+                // 如果处理过的链接和主链接相同则表示为空链接，则不保存到图片数组中
+                if (src == mainUrl) {
+                    return;
+                }
+                // 保存验证好的链接到数组中
                 imageLinks.push(src);
             })
             // 下载图片函数
@@ -85,7 +95,6 @@ htmlPath.forEach(function(item,index,arr){
                         downloadImage(item, destImage, function(err, data){
                             console.log("["+ index++ +"]: " + data);
                         });
-                        
                     }
                     callback(null, item);
                 }, 100);
@@ -100,17 +109,50 @@ htmlPath.forEach(function(item,index,arr){
     
                 // 保存并修改文件路径
                 $(el).each(function(i){
+                    // 获取路径
                     var urls = $(this).attr(attr);
+                    
+                    // 更新路径
                     var newUrl = "./"+dir+"/"+getFileName(urls);
                     $(this).attr(attr,newUrl);
+
+                    // 通过路径进行http请求
                     request(urls, function (error, response, body){
+                        // 保存文件
                         fs.writeFile(path.join(__dirname, mainDir+"/"+dir, getFileName(urls)), body, function (error) {
                             if (error) {
                                 console.log(error)
                             }
                             console.log('['+i+']',urls);
                         })
+                        // 如果目录是 style 则下载里面的链接
+                        if (dir == 'style' ) {
+                            var cssStr = body;
+                            var regExp = /\.\.\/images\/(\w+)\.(png|jpg|gif)/g;
+                            var result = cssStr.match(regExp);
+                            if (result) {
+                                result.forEach(function(item,index,array) {
+                                    var item = item.replace('../','template/default/');
+                                    result[index] = mainUrl+item
+                                })
+                            }
+                            // console.log(result);
+                            // 异步下载图片
+                            async.mapSeries(result, function(item, callback) {
+                                setTimeout(function() {
+                                    if (item.indexOf(mainUrl) === 0) {
+                                        var destImage = path.resolve(mainDir+"/images/", item.split("/")[item.split("/").length -1]);
+                                        downloadImage(item, destImage, function(err, data){
+                                            console.log("["+ index++ +"]: " + data);
+                                        });
+                                        
+                                    }
+                                    callback(null, item);
+                                }, 100);
+                            }, function(err, results) {});
+                        }
                     })
+                    
                 })
             }
             
