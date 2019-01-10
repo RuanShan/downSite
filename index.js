@@ -4,7 +4,7 @@ var cheerio = require('cheerio');
 var async = require("async");
 var request = require('request');
 var index = 1;
-var mainUrl = 'http://moban.cn86.cn:8000/w90124/';
+var mainUrl = 'http://moban.cn86.cn:8000/w90122/';
 
 var linkList = mainUrl.split('/');
 var mainDir = linkList[linkList.length - 2];
@@ -65,7 +65,9 @@ htmlPath.forEach(function(item,index,arr){
                 // 补全图片路径
                 if (src.indexOf(mainUrl) == -1 && src !== "") {
                     if( src.indexOf(mainDir) != -1) {
-                        src= mainUrl.replace(mainDir,'')+src;
+                        // 如果不加'/'的话会生成 /// 这样链接 会导致图片下载不下来
+                        // 通常是通过说明页添加的图片 类似 /w90175/data/upload/image/20180919/1537321920480621.png
+                        src= mainUrl.replace("/"+mainDir+"/",'')+src;
                     } else {
                         src= mainUrl+src;
                     }
