@@ -5,9 +5,9 @@ var async = require("async");
 var request = require('request');
 
 // 域名
-var requestUrl = 'http://moban.cn86.cn:8000/k610195/';
+var requestUrl = 'http://moban.cn86.cn:8000/k610182/';
 //架构编号
-var tplNum = 'k610195';
+var tplNum = 'k610182';
 // 下载地址, 老站为空，新站要加域名
 var domain = ''
 
@@ -181,7 +181,7 @@ request(requestUrl, function(error, response, body) {
                                             }, function(err, results) {});
                                             
                                             // 删除二级目录
-                                            var newBody = body.replace(/\.\.\/images(\/\w+)?/g, '../images')
+                                            var newBody = body.replace(/\.\.\/images(\/\w+)?\//g, '../images/')
                                             // 保存文件
                                             fs.writeFile(path.join(__dirname, tplNum+"/"+dir, getFileName(urls)), newBody, function (error) {
                                                 if (error) {
