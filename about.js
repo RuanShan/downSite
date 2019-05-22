@@ -3,13 +3,25 @@ var path = require('path');
 var cheerio = require('cheerio');
 var async = require("async");
 var request = require('request');
+// oss 路径
+var ossPath = '//cn86-moban.oss-cn-hangzhou.aliyuncs.com/'
 
 // 域名
-var requestUrl = 'http://moban.cn86.cn:8000/k610182/';
-//架构编号
-var tplNum = 'k610182';
+var requestUrl = 'http://218.4.132.130:7955/9.6.1_test1/';
+//目录
+var tplNum = '9.6.1_test1';
+// 需要上传的架构编号
+var ossNum = 'MX500011'
 // 下载地址, 老站为空，新站要加域名
-var domain = ''
+var domain = 'http://218.4.132.130:7955/'
+// 是否是9.6.1
+var newVersion = true;
+// 详情页面地址
+var detailPath = {
+    product: 'http://218.4.132.130:7955/9.6.1_test1/product/631.html',
+    case: 'http://218.4.132.130:7955/9.6.1_test1/case/66.html',
+    news: 'http://218.4.132.130:7955/9.6.1_test1/news/399.html'
+}
 
 // 创建初始目录 包含images 目录(因为下面下载图片的时候无法没有提前生成目录)
 fs.mkdir(tplNum+"/images/", { recursive: true }, (err) => {
@@ -17,8 +29,13 @@ fs.mkdir(tplNum+"/images/", { recursive: true }, (err) => {
 });
 
 // 导航类名
-var navClass = '#menu .nav a';
-var htmlPath = [];
+var navClass = '.new-nav a';
+var htmlPath = [
+    {url: requestUrl, name: 'index.html'},
+    {url: detailPath.product, name: 'product_detail.html'},
+    {url: detailPath.case, name: 'case_detail.html'},
+    {url: detailPath.news, name: 'news_detail.html'}
+];
 
 // 获取文件名
 function getFileName($url) {
@@ -32,10 +49,9 @@ function getFileName($url) {
 }
 
 function createHtml (src) {
-    if (src === '/') {
+    if (src === '/' || src === requestUrl) {
         return 'index.html'
-    }
-    if (src.indexOf('.html') !== -1) {
+    } else if (src.indexOf('.html') !== -1) {
         return src.split('/')[src.split('/').length - 1]
     } else {
         return src.split('/')[src.split('/').length - 2]+'.html'
@@ -53,23 +69,29 @@ request(requestUrl, function(error, response, body) {
             htmlPath.push({url: href, name: createHtml(href)})
         })
 
-        // console.log(htmlPath)
-        // return false;
 
         htmlPath.forEach(function(item,index,arr){
             request(domain+item.url, function(error, response, body) {
                 if (!error && response && response.statusCode == 200) {
+                    // 替换详情页
+                    body = body.replace(/href=('|")(https?:\/\/)?(.+\/)?product\/\d+\.html('|")/g, 'href="product_detail.html"').replace(/href=('|")(https?:\/\/)?(.+\/)?case\/\d+\.html('|")/g, 'href="case_detail.html"').replace(/href=('|")(https?:\/\/)?(.+\/)?news\/\d+\.html('|")/g, 'href="news_detail.html"')
+
                     var $ = cheerio.load(body, {decodeEntities: false});
 
                     // 替换导航路径
                     for (var x = 0; x < arr.length; x++) {
                         $('a[href="'+arr[x].url+'"]').attr('href',arr[x].name).addClass('replace');
                     }
+                    $('a[href="product_detail.html"]').addClass('replace');
+                    $('a[href="case_detail.html"]').addClass('replace');
+                    $('a[href="news_detail.html"]').addClass('replace');
+
+                    // 替换链接为空
                     $('a[href]').each(function () { 
                         if (!$(this).hasClass("replace")) {
                             $(this).attr('href', 'javascript:;');
                         }
-                     })
+                    })
             
                     /* 下载图片 */
                     // 这种格式无法下载(http://moban.cn86.cn:8000/W80283/data/include/imagecode.php?act=verifycode) 
@@ -81,11 +103,12 @@ request(requestUrl, function(error, response, body) {
                         var src = $(this).attr('src');
             
                         // 替换路径
-                        var newSrc = "./images/"+getFileName(src);
+                        var newSrc = ossPath+ossNum+"/images/"+getFileName(src);
                         $(this).attr('src', newSrc);
 
                         // 补全图片路径
                         if (src.indexOf(requestUrl) == -1 && src !== "") {
+                            
                             if( src.indexOf(tplNum) != -1) {
                                 // 如果不加'/'的话会生成 /// 这样链接 会导致图片下载不下来
                                 // 通常是通过说明页添加的图片 类似 /w90175/data/upload/image/20180919/1537321920480621.png
@@ -101,6 +124,7 @@ request(requestUrl, function(error, response, body) {
                         // 保存验证好的链接到数组中
                         imageLinks.push(src);
                     })
+
                     // 下载图片函数
                     var downloadImage = function(src, dest, callback) {
                         request.head(src, function(err, res, body) {
@@ -157,14 +181,24 @@ request(requestUrl, function(error, response, body) {
                                         // 如果目录是 style 则下载里面的链接
                                         if (dir == 'style' ) {
                                             var cssStr = body;
-                                            var regExp = /\.\.\/images(\/\w+)?\/(\w+)\.(png|jpg|gif)/g;
+                                            var regExp = /\.\.\/images(\/\w+)?\/([\w-\w]+)\.(png|jpg|gif)/g;
                                             var result = cssStr.match(regExp);
+
+                                            
                                             if (result) {
                                                 result.forEach(function(item,index,array) {
-                                                    var item = item.replace('../','template/default/')  ;
-                                                    result[index] = requestUrl+item
+                                                    var cssImgSrc = '';
+                                                    // 判断是否为新版本，新版本旧版本的路径不一样
+                                                    if (newVersion) {
+                                                        cssImgSrc = item.replace('../','template/default/assets/');
+                                                    } else {
+                                                        cssImgSrc = item.replace('../','template/default/');
+                                                    }
+                                                    
+                                                    result[index] = requestUrl+cssImgSrc
                                                 })
                                             }
+                                            // 去重
                                             var newResult = Array.from(new Set(result))
                                             // 异步下载图片
                                             async.mapSeries(newResult, function(item, callback) {
@@ -181,7 +215,7 @@ request(requestUrl, function(error, response, body) {
                                             }, function(err, results) {});
                                             
                                             // 删除二级目录
-                                            var newBody = body.replace(/\.\.\/images(\/\w+)?\//g, '../images/')
+                                            var newBody = body.replace(/\.\.\/images(\/\w+)?\//g, ossPath+ossNum+'/images/')
                                             // 保存文件
                                             fs.writeFile(path.join(__dirname, tplNum+"/"+dir, getFileName(urls)), newBody, function (error) {
                                                 if (error) {
