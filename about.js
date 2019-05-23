@@ -4,16 +4,16 @@ var cheerio = require('cheerio');
 var async = require("async");
 var request = require('request');
 // oss 路径
-var ossPath = '//cn86-moban.oss-cn-hangzhou.aliyuncs.com/'
+var ossPath = '//mobancdn.cn86.cn/'
 
 // 域名
-var requestUrl = 'http://218.4.132.130:39/jiagou_hunshas/';
+var requestUrl = 'http://218.4.132.130:7955/9.6.1_test1/';
 //目录
-var tplNum = 'jiagou_hunshas';
+var tplNum = '9.6.1_test1';
 // 需要上传的架构编号
-var ossNum = 'mx500014'
+var ossNum = 'mx500011'
 // 下载地址, 老站为空，新站要加域名
-var domain = ''
+var domain = 'http://218.4.132.130:7955/'
 // 是否是9.6.0
 var newVersion = true;
 
@@ -23,12 +23,12 @@ fs.mkdir(tplNum+"/images/", { recursive: true }, (err) => {
 });
 
 // 导航类名
-var navClass = '.xy-menu a';
+var navClass = '.new-nav a';
 var htmlPath = [
     {url: requestUrl, name: 'index.html'},
-    {url: requestUrl+"/product/632.html", name: 'product_detail.html'},
-    {url: requestUrl+"/case/65.html", name: 'case_detail.html'},
-    {url: requestUrl+"/news/397.html", name: 'news_detail.html'}
+    {url: tplNum+"/product/631.html", name: 'product_detail.html'},
+    {url: tplNum+"/case/66.html", name: 'case_detail.html'},
+    {url: tplNum+"/news/399.html", name: 'news_detail.html'}
 ];
 
 // 获取文件名
@@ -66,8 +66,8 @@ request(requestUrl, function(error, response, body) {
         htmlPath.forEach(function(item,index,arr){
             request(domain+item.url, function(error, response, body) {
                 if (!error && response && response.statusCode == 200) {
-                    // 替换详情页和行业样式中的背景图片
-                    body = body.replace(/href=('|")(https?:\/\/)?(.+\/)?product\/\d+\.html('|")/g, 'href="product_detail.html"').replace(/href=('|")(https?:\/\/)?(.+\/)?case\/\d+\.html('|")/g, 'href="case_detail.html"').replace(/href=('|")(https?:\/\/)?(.+\/)?news\/\d+\.html('|")/g, 'href="news_detail.html"').replace(/url\((https?:)?\/\/([\w:\.]+\/)+/g, 'url('+ossPath+ossNum+'/images/')
+                    // 替换详情页地址
+                    body = body.replace(/href=('|")(https?:\/\/)?(.+\/)?product\/\d+\.html('|")/g, 'href="product_detail.html"').replace(/href=('|")(https?:\/\/)?(.+\/)?case\/\d+\.html('|")/g, 'href="case_detail.html"').replace(/href=('|")(https?:\/\/)?(.+\/)?news\/\d+\.html('|")/g, 'href="news_detail.html"')
 
                     /* 这里是为了下载行内样式里的图片 */
                     var bgImg = body.match(/url\((https?:)?\/\/([\w:\.]+\/)+.*?(\.(png|jpg|gif))\)/g)
@@ -77,7 +77,9 @@ request(requestUrl, function(error, response, body) {
                             newBgImg.push(ele.replace('url(','').replace(')',''))
                         })
                     }
-
+                    // 将原本的路径替换为oss路径
+                    body = body.replace(/url\((https?:)?\/\/([\w:\.]+\/)+/g, 'url('+ossPath+ossNum+'/images/')
+                    
                     var $ = cheerio.load(body, {decodeEntities: false});
 
                     // 替换导航路径
@@ -142,7 +144,7 @@ request(requestUrl, function(error, response, body) {
                         });
                     };
                     // 异步下载图片
-                    async.mapSeries(finalArr, function(item, callback) {
+                    async.mapSeries(newBgImg, function(item, callback) {
                         setTimeout(function() {
                             if (item.indexOf(requestUrl) === 0) {
                                 var destImage = path.resolve(tplNum+"/images/", item.split("/")[item.split("/").length -1]);
