@@ -7,21 +7,15 @@ var request = require('request');
 var ossPath = '//cn86-moban.oss-cn-hangzhou.aliyuncs.com/'
 
 // 域名
-var requestUrl = 'http://218.4.132.130:7955/9.6.1_test1/';
+var requestUrl = 'http://218.4.132.130:39/jiagou_hunshas/';
 //目录
-var tplNum = '9.6.1_test1';
+var tplNum = 'jiagou_hunshas';
 // 需要上传的架构编号
-var ossNum = 'MX500011'
+var ossNum = 'mx500014'
 // 下载地址, 老站为空，新站要加域名
-var domain = 'http://218.4.132.130:7955/'
-// 是否是9.6.1
+var domain = ''
+// 是否是9.6.0
 var newVersion = true;
-// 详情页面地址
-var detailPath = {
-    product: 'http://218.4.132.130:7955/9.6.1_test1/product/631.html',
-    case: 'http://218.4.132.130:7955/9.6.1_test1/case/66.html',
-    news: 'http://218.4.132.130:7955/9.6.1_test1/news/399.html'
-}
 
 // 创建初始目录 包含images 目录(因为下面下载图片的时候无法没有提前生成目录)
 fs.mkdir(tplNum+"/images/", { recursive: true }, (err) => {
@@ -29,12 +23,12 @@ fs.mkdir(tplNum+"/images/", { recursive: true }, (err) => {
 });
 
 // 导航类名
-var navClass = '.new-nav a';
+var navClass = '.xy-menu a';
 var htmlPath = [
     {url: requestUrl, name: 'index.html'},
-    {url: detailPath.product, name: 'product_detail.html'},
-    {url: detailPath.case, name: 'case_detail.html'},
-    {url: detailPath.news, name: 'news_detail.html'}
+    {url: requestUrl+"/product/632.html", name: 'product_detail.html'},
+    {url: requestUrl+"/case/65.html", name: 'case_detail.html'},
+    {url: requestUrl+"/news/397.html", name: 'news_detail.html'}
 ];
 
 // 获取文件名
@@ -49,7 +43,7 @@ function getFileName($url) {
 }
 
 function createHtml (src) {
-    if (src === '/' || src === requestUrl) {
+    if (src === '/' || src === requestUrl  || src === '/'+tplNum+'/') {
         return 'index.html'
     } else if (src.indexOf('.html') !== -1) {
         return src.split('/')[src.split('/').length - 1]
@@ -68,13 +62,21 @@ request(requestUrl, function(error, response, body) {
             var href = $(this).attr('href')
             htmlPath.push({url: href, name: createHtml(href)})
         })
-
-
+        
         htmlPath.forEach(function(item,index,arr){
             request(domain+item.url, function(error, response, body) {
                 if (!error && response && response.statusCode == 200) {
-                    // 替换详情页
-                    body = body.replace(/href=('|")(https?:\/\/)?(.+\/)?product\/\d+\.html('|")/g, 'href="product_detail.html"').replace(/href=('|")(https?:\/\/)?(.+\/)?case\/\d+\.html('|")/g, 'href="case_detail.html"').replace(/href=('|")(https?:\/\/)?(.+\/)?news\/\d+\.html('|")/g, 'href="news_detail.html"')
+                    // 替换详情页和行业样式中的背景图片
+                    body = body.replace(/href=('|")(https?:\/\/)?(.+\/)?product\/\d+\.html('|")/g, 'href="product_detail.html"').replace(/href=('|")(https?:\/\/)?(.+\/)?case\/\d+\.html('|")/g, 'href="case_detail.html"').replace(/href=('|")(https?:\/\/)?(.+\/)?news\/\d+\.html('|")/g, 'href="news_detail.html"').replace(/url\((https?:)?\/\/([\w:\.]+\/)+/g, 'url('+ossPath+ossNum+'/images/')
+
+                    /* 这里是为了下载行内样式里的图片 */
+                    var bgImg = body.match(/url\((https?:)?\/\/([\w:\.]+\/)+.*?(\.(png|jpg|gif))\)/g)
+                    var newBgImg = []
+                    if (bgImg) {
+                        bgImg.forEach(function(ele) {
+                            newBgImg.push(ele.replace('url(','').replace(')',''))
+                        })
+                    }
 
                     var $ = cheerio.load(body, {decodeEntities: false});
 
@@ -94,10 +96,7 @@ request(requestUrl, function(error, response, body) {
                     })
             
                     /* 下载图片 */
-                    // 这种格式无法下载(http://moban.cn86.cn:8000/W80283/data/include/imagecode.php?act=verifycode) 
-                    // 一般是验证码，验证吗通常都有 id="checkCodeImg"
-                    $('img[id="checkCodeImg"]').remove();
-
+                    $('img[id="checkCodeImg"]').removeAttr('src')
                     var imageLinks = []
                     $('img[src]').each(function(){
                         var src = $(this).attr('src');
@@ -124,6 +123,13 @@ request(requestUrl, function(error, response, body) {
                         // 保存验证好的链接到数组中
                         imageLinks.push(src);
                     })
+                    
+                    // 这种格式无法下载(http://moban.cn86.cn:8000/W80283/data/include/imagecode.php?act=verifycode) 
+                    // 一般是验证码，验证吗通常都有 id="checkCodeImg"
+                    $('img[id="checkCodeImg"]').removeAttr('onclick').attr('src', ossPath+'communal/imagecode.jpg');
+
+                    // 将两个数组合并
+                    var finalArr = imageLinks.concat(newBgImg)
 
                     // 下载图片函数
                     var downloadImage = function(src, dest, callback) {
@@ -136,7 +142,7 @@ request(requestUrl, function(error, response, body) {
                         });
                     };
                     // 异步下载图片
-                    async.mapSeries(imageLinks, function(item, callback) {
+                    async.mapSeries(finalArr, function(item, callback) {
                         setTimeout(function() {
                             if (item.indexOf(requestUrl) === 0) {
                                 var destImage = path.resolve(tplNum+"/images/", item.split("/")[item.split("/").length -1]);
@@ -160,7 +166,7 @@ request(requestUrl, function(error, response, body) {
                             // 获取路径
                             var urls = $(this).attr(attr);
                             // 更新路径
-                            var newUrl = "./"+dir+"/"+getFileName(urls);
+                            var newUrl = ossPath+ossNum+"/"+dir+"/"+getFileName(urls);
                             $(this).attr(attr,newUrl);
 
                             // 通过路径进行http请求
@@ -184,7 +190,6 @@ request(requestUrl, function(error, response, body) {
                                             var regExp = /\.\.\/images(\/\w+)?\/([\w-\w]+)\.(png|jpg|gif)/g;
                                             var result = cssStr.match(regExp);
 
-                                            
                                             if (result) {
                                                 result.forEach(function(item,index,array) {
                                                     var cssImgSrc = '';

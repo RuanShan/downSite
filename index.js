@@ -4,7 +4,7 @@ var cheerio = require('cheerio');
 var async = require("async");
 var request = require('request');
 var index = 1;
-var mainUrl = 'http://moban.cn86.cn:8000/w90122/';
+var mainUrl = 'http://duxiucg.mycn86.cn/';
 
 var linkList = mainUrl.split('/');
 var mainDir = linkList[linkList.length - 2];
